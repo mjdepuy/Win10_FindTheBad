@@ -2,12 +2,6 @@
 # advantage of PowerShell's capabilities and substitute with WMIC
 # where necessary. 
 #
-# STILL TO DO:  Dump everything to individual files
-#               Prefetch parsing
-#               Chrome/FireFox extensions
-#               IE/Edge/Chrome/FireFox history
-#               Certificates (for all users)
-#
 # Author: Michael Depuy
 # Date: 27 March 2019
 
