@@ -52,7 +52,7 @@ function Get-DeletedMetadata
         
         $filedata = " Filename=`""+[string]$filename+"`""+" Header=`""+[string]$header_str +"`"" +" Original_size=`""+[string]$file_size +"`"" +" Original_file_path=`""+[string]$path_str +"`"" +" Deleted_date=`""+[string]$del_time +"`"" + " File_Hash_SHA1=`""+ $shahash +"`"" 
                  
-        Write-Host $filedata
+        Add-Content ".\recyclebin.txt" $filedata
     }
 
     # If the file header does not match an $I file, print name, header, size, location
@@ -65,7 +65,7 @@ function Get-DeletedMetadata
         
         $filedata = " Filename=`""+[string]$filename+"`""+" Original_size=`""+[string]$file_size +"`"" +" Original_file_path=`""+[string]$path_str +"`"" + " File_Hash_SHA1=`""+ $shahash +"`""
         
-        Write-Host $filedata
+        Add-Content ".\recyclebin.txt" $filedata
     }
     
 }
@@ -76,6 +76,12 @@ function Get-DeletedMetadata
 # Get username and computer name
 $user = Get-Content Env:username
 $cname = Get-Content Env:computername
+$d = get-date -uformat "%Y%m%d%H%M%S"
+
+# Create dump directory and set current path to it
+$foldername = "$($d)_$($cname)"
+mkdir ".\$($foldername)"
+Set-Location ".\$($foldername)"
 
 Write-Host "Starting analysis of $($cname) under user $($user).`n"
 Write-Host "Testing for administrator rights...`n"
@@ -97,16 +103,16 @@ Else{
 ###########################################################
 Write-Host $divider
 Write-Host "Grabbing network configuration information"
-ipconfig /all
+ipconfig /all >> ".\ipconfig.txt"
 
 Write-Host $divider
 Write-Host "Grabbing network connections"
 
 If($is_admin -eq "True"){
-    netstat -anob
+    netstat -anob >> ".\netstat_ADMIN.txt"
 }
 Else{
-    netstat -ano
+    netstat -ano >> ".\netstat_NOADMIN.txt"
 }
 
 ###########################################################
@@ -115,15 +121,16 @@ Else{
 
 Write-Host $divider
 Write-Host "Grabbing process list"
-Get-Process
+Get-Process >> ".\process_list.txt"
 
 Write-Host $divider
 Write-Host "Grabbing services list"
-Get-Service
+Get-Service >> ".\service_list.txt"
 
 Write-Host $divider
 Write-Host "Grabbing modules list (this takes a while)"
-Get-process -Module
+Get-Process -Module -ErrorAction SilentlyContinue >> ".\module_list.txt"
+
 
 ###########################################################
 ################ RECYCLE BIN ANALYSIS #####################
@@ -145,69 +152,63 @@ foreach ($item in $bin){
             $f = $item.FullName
             Get-DeletedMetadata -file $f
         }
+        echo "`n" >> ".\recyclebin.txt"
     }
-    Write-Host 
 }
 
 ###########################################################
 #################### REGISTRY ANALYSIS ####################
 ###########################################################
 Write-Host $divider
-Write-Host "`nBeginning registry analysis"
-Write-Host "`n-------Getting registry autoruns-------`n"
-Get-ItemProperty -Path HKLM:\Software\Microsoft\Windows\Currentversion\Run
-Get-ItemProperty -Path HKLM:\Software\Microsoft\Windows\Currentversion\RunOnce
-Get-ItemProperty -Path HKCU:\Software\Microsoft\Windows\Currentversion\Run
-Get-ItemProperty -Path HKCU:\Software\Microsoft\Windows\Currentversion\RunOnce
+Write-Host "Beginning registry analysis"
+Write-Host "`n-------Getting registry autoruns-------"
+Get-ItemProperty -Path HKLM:\Software\Microsoft\Windows\Currentversion\Run >> ".\registry_HKLM_run.txt"
+Get-ItemProperty -Path HKLM:\Software\Microsoft\Windows\Currentversion\RunOnce >> ".\registry_HKLM_runonce.txt"
+Get-ItemProperty -Path HKCU:\Software\Microsoft\Windows\Currentversion\Run >> ".\registry_HKCU_run.txt"
+Get-ItemProperty -Path HKCU:\Software\Microsoft\Windows\Currentversion\RunOnce >> ".\registry_HKCU_runonce.txt"
 
-Write-Host "`n-------Getting userinit-------`n"
-Get-ItemProperty -Path HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
-Get-ItemProperty -Path HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components
+Write-Host "`n-------Getting userinit-------"
+Get-ItemProperty -Path HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon >> ".\registry_HKLM_winlogon.txt"
+Get-ItemProperty -Path HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components >> ".\registry_HKLM_installedcomponents.txt"
 
-Write-Host "`n-------Getting process MRU-------`n"
-$pidmru = Get-Item -Path HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ComDlg32\LastVisitedPidlMRU
-$pidmru
+Write-Host "`n-------Getting process MRU-------"
+Get-Item -Path HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ComDlg32\LastVisitedPidlMRU >> ".\registry_HKCU_pidmru.txt"
+echo "`n" >> ".\registry_HKCU_pidmru.txt"
 ForEach($p in $pidmru.Property){
-    $prop = Get-ItemProperty -Path HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ComDlg32\LastVisitedPidlMRU -Name $p
-    Write-Host "`n$($prop)"
-    [System.Text.Encoding]::Ascii.GetString($prop.$p)
-    Write-Host "`n"
+    $prop = Get-ItemProperty -Path HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ComDlg32\LastVisitedPidlMRU -Name $p >> ".\registry_HKCU_pidmru.txt"
+    [System.Text.Encoding]::Ascii.GetString($prop.$p) >> ".\registry_HKCU_pidmru.txt"
+    echo "`n" >> ".\registry_HKCU_pidmru.txt"
 }
 
-Write-Host $divider
-Write-Host "`n-------Getting RunMRU-------`n"
-Get-ItemProperty -Path HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\RunMRU
+Write-Host "`n-------Getting RunMRU-------"
+Get-ItemProperty -Path HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\RunMRU >> ".\registry_HKCU_runmru.txt"
 
 
-Write-Host $divider
-Write-Host "`n-------Getting file MRU-------`n"
+Write-Host "`n-------Getting file MRU-------"
 $filemru = Get-Item -Path HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\RecentDocs
 $filemru
 ForEach($p in $filemru.Property){
     $prop = Get-ItemProperty -Path HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\RecentDocs -Name $p
-    Write-Host "`n$($prop)"
-    [System.Text.Encoding]::Ascii.GetString($prop.$p)
-    Write-Host "`n"
+    Add-Content ".\registry_HKCU_recentdocs.txt" "`n$($prop)"
+    [System.Text.Encoding]::Ascii.GetString($prop.$p) >> ".\registry_HKCU_recentdocs.txt"
 }
 
 ###########################################################
 #################### LNK FILE ANALYSIS ####################
 ###########################################################
 Write-Host $divider
-Write-Host "`nBeginning LNK file analysis"
+Write-Host "Beginning LNK file analysis"
 $windows_recent_path = "C:\Users\$($user)\AppData\Roaming\Microsoft\Windows\Recent"
 $office_recent_path = "C:\Users\$($user)\AppData\Roaming\Microsoft\Office\Recent"
-# First LNK path
-$lnk_windows = Get-ChildItem $windows_recent_path | sort LastWriteTime -Descending
-ForEach($f in $lnk_windows){
-    Write-Host "$($f.Name) `t $($f.LastWriteTime)"
-}
+Get-ChildItem $windows_recent_path | sort LastWriteTime -Descending >> ".\lnkfiles.txt"
+echo "`n" >> ".\lnkfiles.txt"
+Get-ChildItem $office_recent_path | sort LastWriteTime -Descending >> ".\lnkfiles.txt"
 
 ###########################################################
 #################### PREFETCH ANALYSIS ####################
 ###########################################################
 Write-Host $divider
-Write-Host "`nBeginning prefetch analysis."
+Write-Host "Beginning prefetch analysis."
 $pf_exists = Test-Path "C:\Windows\Prefetch"
 If($pf_exists -eq $false){
     Write-Host "`nNo prefetch directory detected. Continuing..."
@@ -217,14 +218,12 @@ Else{
         Write-Host "`nAdmin rights not detected. Continuing..."
     }
     Else{
-        $pf = Get-ChildItem C:\Windows\Prefetch | sort LastWriteTime -Descending
-        ForEach($f in $pf){
-            Write-Host "$($f.Name) `t $($f.LastWriteTime)"
-        }
+        Get-ChildItem C:\Windows\Prefetch | sort LastWriteTime -Descending >> ".\prefetch.txt"
     }
 }
 
 
 
-Write-Host "`n$($divider)"
+Write-Host $divider
+
 Write-Host "Fin."
